@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数学错题本 V1.0</title>
+    <title>数学错题本 V1.3</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
                     <path d="M12 20h9"></path>
                     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
                 </svg>
-                <h1 class="logo-text">数学错题本 <span class="version">V1.0</span></h1>
+                <h1 class="logo-text">数学错题本 <span class="version">V1.3</span></h1>
             </div>
             <p class="header-subtitle">记录错题，高效复习，稳步提升</p>
         </div>
@@ -142,6 +142,24 @@
                         ></textarea>
                     </div>
 
+                    <!-- 题目图片 -->
+                    <div class="form-group">
+                        <label class="form-label">题目图片 <span class="optional">(可选)</span></label>
+                        <div class="image-upload-row">
+                            <button type="button" class="btn btn-sm btn-secondary" id="addImageBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                                添加图片
+                            </button>
+                            <span class="image-hint">支持 JPG/PNG，自动压缩至 800px</span>
+                            <input type="file" id="imageFileInput" accept="image/*" multiple style="display:none;">
+                        </div>
+                        <div class="image-preview-list" id="imagePreviewList"></div>
+                    </div>
+
                     <!-- 难度 -->
                     <div class="form-group">
                         <label class="form-label">难度 <span class="required">*</span></label>
@@ -206,6 +224,78 @@
                         </svg>
                         错题列表
                     </h2>
+                </div>
+
+                <!-- 筛选与排序工具栏 -->
+                <div class="filter-toolbar">
+                    <div class="filter-row">
+                        <select id="filterSubject" class="filter-select">
+                            <option value="">📚 全部科目</option>
+                            <option value="高等数学">高等数学</option>
+                            <option value="线性代数">线性代数</option>
+                            <option value="概率论">概率论</option>
+                        </select>
+                        <select id="filterDifficulty" class="filter-select">
+                            <option value="">⭐ 全部难度</option>
+                            <option value="1">★ 1星</option>
+                            <option value="2">★★ 2星</option>
+                            <option value="3">★★★ 3星</option>
+                            <option value="4">★★★★ 4星</option>
+                            <option value="5">★★★★★ 5星</option>
+                        </select>
+                        <select id="sortBy" class="filter-select">
+                            <option value="newest">🕐 时间最新</option>
+                            <option value="oldest">🕐 时间最旧</option>
+                            <option value="difficulty-desc">🔥 难度最高</option>
+                            <option value="difficulty-asc">💡 难度最低</option>
+                        </select>
+                    </div>
+                    <div class="filter-extras">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filterFavorites"> ❤️ 仅收藏
+                        </label>
+                        <select id="filterMastered" class="filter-select">
+                            <option value="">📋 全部状态</option>
+                            <option value="unmastered">🔄 未掌握</option>
+                            <option value="mastered">✅ 已掌握</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-sm btn-secondary" id="batchModeBtn" title="批量选择">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M9 11l3 3L22 4"></path>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
+                            批量
+                        </button>
+                        <button class="btn btn-sm btn-danger" id="batchDeleteBtn" style="display:none;" title="删除选中">
+                            删除选中
+                        </button>
+                        <button class="btn btn-sm btn-secondary" id="exportBtn" title="导出JSON备份">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            导出
+                        </button>
+                        <button class="btn btn-sm btn-secondary" id="importBtn" title="从JSON文件导入">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="3 10 12 15 21 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            导入
+                        </button>
+                        <button class="btn btn-sm btn-danger" id="clearAllBtn" title="清空全部数据">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            清空
+                        </button>
+                    </div>
+                    <input type="file" id="importFileInput" accept=".json" style="display:none;">
                 </div>
 
                 <!-- 搜索框 -->
@@ -287,6 +377,27 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelDeleteBtn">取消</button>
                 <button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 图片查看器弹窗 ==================== -->
+    <div class="modal-overlay" id="imageViewerModal">
+        <div class="modal-container image-viewer-container">
+            <div class="modal-header">
+                <h3 class="modal-title" id="imageViewerTitle">图片预览</h3>
+                <button class="modal-close" id="closeImageViewerModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body image-viewer-body">
+                <img id="imageViewerImg" src="" alt="题目图片" style="width:100%; height:auto; border-radius:8px;">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeImageViewerBtn">关闭</button>
             </div>
         </div>
     </div>

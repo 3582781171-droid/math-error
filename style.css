@@ -1,5 +1,5 @@
 /* ============================================================
-   数学错题本 V1.0 — 样式表
+   数学错题本 V1.3 — 样式表
    ============================================================ */
 
 /* ==================== CSS 变量 ==================== */
@@ -508,6 +508,280 @@ body {
     flex: 1;
 }
 
+/* ==================== 筛选与排序工具栏 ==================== */
+.filter-toolbar {
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.filter-select {
+    padding: 6px 10px;
+    font-size: 0.8125rem;
+    font-family: var(--font-sans);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    max-width: 150px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 5.646a.5.5 0 0 1 .708 0L8 8.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 28px;
+}
+
+.filter-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar-actions .btn svg {
+    flex-shrink: 0;
+}
+
+/* 筛选扩展区（收藏复选框 + 掌握状态） */
+.filter-extras {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.filter-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+}
+
+.filter-checkbox:hover {
+    background: var(--white);
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+/* ==================== 图片上传 ==================== */
+.image-upload-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.image-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.image-preview-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.image-preview-item {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+}
+
+.image-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-preview-item .image-delete-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background var(--transition);
+}
+
+.image-preview-item .image-delete-btn:hover {
+    background: var(--danger);
+}
+
+/* 详情中的图片列表 */
+.detail-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.detail-image-thumb {
+    width: 100px;
+    height: 100px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    object-fit: cover;
+    transition: border-color var(--transition), transform var(--transition);
+}
+
+.detail-image-thumb:hover {
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
+/* 图片查看器 */
+.image-viewer-container {
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.image-viewer-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1E1E2E;
+    padding: var(--space-md);
+    overflow: hidden;
+}
+
+.image-viewer-body img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+/* 卡片中的图片标记 */
+.error-card-images-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+/* ==================== 批量选择 ==================== */
+.error-card-checkbox {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 2px;
+}
+
+.error-card-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.error-card.selected {
+    background: var(--primary-light);
+    border-left: 3px solid var(--primary);
+}
+
+.batch-mode-info {
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--primary-light);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8125rem;
+    color: var(--primary);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.batch-mode-info .select-all-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: underline;
+}
+
+/* ==================== 掌握状态切换 ==================== */
+.mastered-btn {
+    background: none;
+    border: 1.5px solid var(--border);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 20px;
+    transition: all var(--transition);
+    white-space: nowrap;
+    font-family: var(--font-sans);
+    color: var(--text-secondary);
+    touch-action: manipulation;
+    min-height: 28px;
+}
+
+.mastered-btn:hover {
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.mastered-btn.mastered {
+    background: var(--success-light);
+    border-color: #A7F3D0;
+    color: #065F46;
+}
+
+.optional {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
 /* ==================== 搜索框 ==================== */
 .search-box {
     padding: var(--space-md) var(--space-lg);
@@ -685,6 +959,54 @@ body {
     gap: var(--space-xs);
     flex-shrink: 0;
     align-self: center;
+}
+
+/* 收藏按钮 */
+.error-card-fav {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 2px;
+}
+
+.fav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.125rem;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    transition: transform var(--transition), opacity var(--transition);
+    line-height: 1;
+    /* 确保触摸目标 ≥ 44px */
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    touch-action: manipulation;
+}
+
+.fav-btn:hover {
+    transform: scale(1.25);
+    opacity: 0.85;
+}
+
+.fav-btn.favorited {
+    opacity: 1;
+}
+
+.fav-btn.favorited:hover {
+    transform: scale(1.15);
+    opacity: 1;
+}
+
+/* 创建时间 */
+.error-card-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
 }
 
 /* ==================== 搜索提示 ==================== */
@@ -944,6 +1266,25 @@ body {
     .form-panel {
         order: -1;
     }
+
+    .filter-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-row {
+        flex-wrap: wrap;
+    }
+
+    .filter-select {
+        flex: 1;
+        min-width: 100px;
+        max-width: none;
+    }
+
+    .toolbar-actions {
+        justify-content: flex-end;
+    }
 }
 
 /* 手机 */
@@ -1003,6 +1344,45 @@ body {
 
     .panel-header {
         padding: var(--space-sm) var(--space-md);
+    }
+
+    .filter-toolbar {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .filter-row {
+        width: 100%;
+    }
+
+    .filter-select {
+        font-size: 0.75rem;
+        padding: 6px 8px;
+        padding-right: 24px;
+    }
+
+    .toolbar-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .toolbar-actions .btn {
+        font-size: 0.75rem;
+        padding: 5px 10px;
+    }
+
+    .filter-extras {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .image-preview-item {
+        width: 60px;
+        height: 60px;
+    }
+
+    .detail-image-thumb {
+        width: 70px;
+        height: 70px;
     }
 
     .search-box {
