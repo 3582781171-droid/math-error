@@ -1,5 +1,5 @@
 /* ============================================================
-   数学错题本 V1.3 — 样式表
+   数学错题本 V1.5 — 样式表
    ============================================================ */
 
 /* ==================== CSS 变量 ==================== */
@@ -192,19 +192,19 @@ body {
     color: var(--primary);
 }
 
-.stat-advanced .stat-icon {
-    background: #FEF3C7;
-    color: #D97706;
-}
-
-.stat-linear .stat-icon {
+.stat-mastered .stat-icon {
     background: #DCFCE7;
     color: #16A34A;
 }
 
-.stat-probability .stat-icon {
-    background: #F3E8FF;
-    color: #9333EA;
+.stat-unmastered .stat-icon {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.stat-favorites .stat-icon {
+    background: #FEE2E2;
+    color: #EF4444;
 }
 
 .stat-info {
@@ -220,9 +220,9 @@ body {
 }
 
 .stat-total .stat-number { color: var(--primary); }
-.stat-advanced .stat-number { color: #D97706; }
-.stat-linear .stat-number { color: #16A34A; }
-.stat-probability .stat-number { color: #9333EA; }
+.stat-mastered .stat-number { color: #16A34A; }
+.stat-unmastered .stat-number { color: #D97706; }
+.stat-favorites .stat-number { color: #EF4444; }
 
 .stat-label {
     font-size: 0.8125rem;
@@ -498,6 +498,54 @@ body {
     border-radius: var(--radius-sm);
 }
 
+/* 复习按钮 - 特殊强调色 */
+.btn-review {
+    background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+    color: var(--white);
+    border-color: #7C3AED;
+}
+
+.btn-review:hover {
+    background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+    border-color: #6D28D9;
+    box-shadow: var(--shadow-md);
+}
+
+.btn-review:active {
+    background: #6D28D9;
+    transform: scale(0.98);
+}
+
+/* 复习中标记掌握按钮 */
+.btn-review-mastered {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 20px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: 1.5px solid #A7F3D0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    background: var(--success-light);
+    color: #065F46;
+}
+
+.btn-review-mastered:hover {
+    background: #D1FAE5;
+    border-color: #6EE7B7;
+}
+
+.btn-review-mastered.btn-mastered-done {
+    background: #DCFCE7;
+    color: #166534;
+    border-color: #86EFAC;
+}
+
 .form-actions {
     display: flex;
     gap: var(--space-sm);
@@ -590,6 +638,45 @@ body {
     height: 16px;
     accent-color: var(--primary);
     cursor: pointer;
+}
+
+/* ==================== 状态筛选按钮组 ==================== */
+.status-filter-group {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.status-filter-btn {
+    padding: 5px 14px;
+    font-size: 0.8125rem;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+    white-space: nowrap;
+    touch-action: manipulation;
+    min-height: 32px;
+    user-select: none;
+}
+
+.status-filter-btn:hover {
+    background: var(--white);
+    color: var(--text-primary);
+}
+
+.status-filter-btn.active {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
 }
 
 /* ==================== 图片上传 ==================== */
@@ -1195,6 +1282,166 @@ body {
     border-left: 3px solid var(--danger);
 }
 
+/* ==================== 随机复习弹窗 ==================== */
+.review-container {
+    max-width: 650px;
+}
+
+.review-body {
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+/* 进度指示 */
+.review-progress-section {
+    text-align: center;
+}
+
+.review-progress-info {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.review-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.review-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #8B5CF6);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+    width: 0%;
+}
+
+/* 题目卡片 */
+.review-question-card {
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    border: 1px solid var(--border);
+}
+
+.review-question-text {
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    font-weight: 500;
+}
+
+.review-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: var(--space-sm);
+}
+
+.review-mastered-status {
+    margin-top: var(--space-sm);
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+/* 答案区域 */
+.review-answer-section {
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+}
+
+.review-answer-header {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: #92400E;
+    margin-bottom: var(--space-sm);
+}
+
+.review-answer-content {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+}
+
+.review-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: var(--space-sm);
+}
+
+/* 操作按钮行 */
+.review-actions {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.review-actions .btn {
+    min-width: 120px;
+}
+
+/* 完成总结 */
+.review-summary-container {
+    text-align: center;
+    padding: var(--space-lg) 0;
+}
+
+.review-summary-icon {
+    font-size: 3rem;
+    margin-bottom: var(--space-sm);
+}
+
+.review-summary-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-lg);
+}
+
+.review-summary-stats {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-xl);
+    flex-wrap: wrap;
+}
+
+.review-summary-stat {
+    text-align: center;
+    min-width: 80px;
+}
+
+.review-summary-num {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.2;
+}
+
+.review-summary-num.review-summary-mastered {
+    color: #16A34A;
+}
+
+.review-summary-num.review-summary-unmastered {
+    color: #D97706;
+}
+
+.review-summary-label {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
 /* ==================== Toast 提示 ==================== */
 .toast-container {
     position: fixed;
@@ -1375,6 +1622,18 @@ body {
         flex-wrap: wrap;
     }
 
+    .status-filter-group {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .status-filter-btn {
+        flex: 1;
+        text-align: center;
+        font-size: 0.75rem;
+        padding: 6px 8px;
+    }
+
     .image-preview-item {
         width: 60px;
         height: 60px;
@@ -1418,6 +1677,27 @@ body {
 
     .form-actions {
         flex-direction: column;
+    }
+
+    .review-summary-stats {
+        gap: var(--space-md);
+    }
+
+    .review-summary-num {
+        font-size: 1.5rem;
+    }
+
+    .review-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .review-actions .btn {
+        min-width: auto;
+    }
+
+    .review-question-text {
+        font-size: 0.9375rem;
     }
 }
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数学错题本 V1.3</title>
+    <title>数学错题本 V1.5</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
                     <path d="M12 20h9"></path>
                     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
                 </svg>
-                <h1 class="logo-text">数学错题本 <span class="version">V1.3</span></h1>
+                <h1 class="logo-text">数学错题本 <span class="version">V1.5</span></h1>
             </div>
             <p class="header-subtitle">记录错题，高效复习，稳步提升</p>
         </div>
@@ -40,42 +40,39 @@
                     <span class="stat-label">错题总数</span>
                 </div>
             </div>
-            <div class="stat-card stat-advanced">
+            <div class="stat-card stat-mastered">
                 <div class="stat-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
                     </svg>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-number" id="statAdvanced">0</span>
-                    <span class="stat-label">高等数学</span>
+                    <span class="stat-number" id="statMastered">0</span>
+                    <span class="stat-label">已掌握</span>
                 </div>
             </div>
-            <div class="stat-card stat-linear">
+            <div class="stat-card stat-unmastered">
                 <div class="stat-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                     </svg>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-number" id="statLinear">0</span>
-                    <span class="stat-label">线性代数</span>
+                    <span class="stat-number" id="statUnmastered">0</span>
+                    <span class="stat-label">未掌握</span>
                 </div>
             </div>
-            <div class="stat-card stat-probability">
+            <div class="stat-card stat-favorites">
                 <div class="stat-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <circle cx="12" cy="12" r="6"></circle>
-                        <circle cx="12" cy="12" r="2"></circle>
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                     </svg>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-number" id="statProbability">0</span>
-                    <span class="stat-label">概率论</span>
+                    <span class="stat-number" id="statFavorites">0</span>
+                    <span class="stat-label">收藏</span>
                 </div>
             </div>
         </section>
@@ -251,16 +248,21 @@
                         </select>
                     </div>
                     <div class="filter-extras">
-                        <label class="filter-checkbox">
-                            <input type="checkbox" id="filterFavorites"> ❤️ 仅收藏
-                        </label>
-                        <select id="filterMastered" class="filter-select">
-                            <option value="">📋 全部状态</option>
-                            <option value="unmastered">🔄 未掌握</option>
-                            <option value="mastered">✅ 已掌握</option>
-                        </select>
+                        <div class="status-filter-group" id="statusFilterGroup">
+                            <button class="status-filter-btn active" data-status="all">📋 全部</button>
+                            <button class="status-filter-btn" data-status="mastered">✅ 已掌握</button>
+                            <button class="status-filter-btn" data-status="unmastered">🔄 未掌握</button>
+                            <button class="status-filter-btn" data-status="favorites">❤️ 收藏</button>
+                        </div>
                     </div>
                     <div class="toolbar-actions">
+                        <button class="btn btn-sm btn-review" id="startReviewBtn" title="随机复习未掌握错题">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            开始复习
+                        </button>
                         <button class="btn btn-sm btn-secondary" id="batchModeBtn" title="批量选择">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <path d="M9 11l3 3L22 4"></path>
@@ -398,6 +400,57 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="closeImageViewerBtn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 随机复习弹窗 ==================== -->
+    <div class="modal-overlay" id="reviewModal">
+        <div class="modal-container review-container">
+            <div class="modal-header">
+                <h3 class="modal-title">📝 随机复习</h3>
+                <button class="modal-close" id="closeReviewModalTop">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body review-body" id="reviewBody">
+                <!-- 进度指示区 -->
+                <div class="review-progress-section" id="reviewProgressSection">
+                    <div class="review-progress-info">
+                        <span id="reviewProgressText">第 1 题 / 共 5 题</span>
+                    </div>
+                    <div class="review-progress-bar">
+                        <div class="review-progress-fill" id="reviewProgressFill"></div>
+                    </div>
+                </div>
+
+                <!-- 题目卡片 -->
+                <div class="review-question-card" id="reviewQuestionCard">
+                    <!-- 动态渲染 -->
+                </div>
+
+                <!-- 答案区域（默认隐藏） -->
+                <div class="review-answer-section" id="reviewAnswerSection" style="display:none;">
+                    <!-- 动态渲染 -->
+                </div>
+
+                <!-- 复习操作按钮 -->
+                <div class="review-actions" id="reviewActions">
+                    <button class="btn btn-secondary" id="reviewShowAnswerBtn">💡 显示答案</button>
+                    <button class="btn btn-review-mastered" id="reviewMasteredBtn" style="display:none;">✅ 标记已掌握</button>
+                    <button class="btn btn-primary" id="reviewNextBtn" style="display:none;">继续 ➡️</button>
+                </div>
+
+                <!-- 完成总结（默认隐藏） -->
+                <div class="review-summary" id="reviewSummary" style="display:none;">
+                    <!-- 动态渲染 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeReviewBtn">退出复习</button>
             </div>
         </div>
     </div>

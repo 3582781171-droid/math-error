@@ -1,5 +1,5 @@
 /* ============================================================
-   数学错题本 V1.3 — 核心逻辑
+   数学错题本 V1.5 — 核心逻辑
    ============================================================ */
 
 // ==================== 常量与配置 ====================
@@ -16,9 +16,9 @@ var SUBJECT_TAG_CLASS = {
 var DOM = {
     // 统计
     statTotal: document.getElementById('statTotal'),
-    statAdvanced: document.getElementById('statAdvanced'),
-    statLinear: document.getElementById('statLinear'),
-    statProbability: document.getElementById('statProbability'),
+    statMastered: document.getElementById('statMastered'),
+    statUnmastered: document.getElementById('statUnmastered'),
+    statFavorites: document.getElementById('statFavorites'),
 
     // 表单
     errorForm: document.getElementById('errorForm'),
@@ -45,8 +45,7 @@ var DOM = {
     // 筛选与排序
     filterSubject: document.getElementById('filterSubject'),
     filterDifficulty: document.getElementById('filterDifficulty'),
-    filterFavorites: document.getElementById('filterFavorites'),
-    filterMastered: document.getElementById('filterMastered'),
+    statusFilterGroup: document.getElementById('statusFilterGroup'),
     sortBy: document.getElementById('sortBy'),
 
     // 工具栏
@@ -81,6 +80,23 @@ var DOM = {
     closeImageViewerModal: document.getElementById('closeImageViewerModal'),
     closeImageViewerBtn: document.getElementById('closeImageViewerBtn'),
 
+    // 随机复习
+    startReviewBtn: document.getElementById('startReviewBtn'),
+    reviewModal: document.getElementById('reviewModal'),
+    reviewBody: document.getElementById('reviewBody'),
+    reviewProgressSection: document.getElementById('reviewProgressSection'),
+    reviewProgressText: document.getElementById('reviewProgressText'),
+    reviewProgressFill: document.getElementById('reviewProgressFill'),
+    reviewQuestionCard: document.getElementById('reviewQuestionCard'),
+    reviewAnswerSection: document.getElementById('reviewAnswerSection'),
+    reviewActions: document.getElementById('reviewActions'),
+    reviewShowAnswerBtn: document.getElementById('reviewShowAnswerBtn'),
+    reviewMasteredBtn: document.getElementById('reviewMasteredBtn'),
+    reviewNextBtn: document.getElementById('reviewNextBtn'),
+    reviewSummary: document.getElementById('reviewSummary'),
+    closeReviewModalTop: document.getElementById('closeReviewModalTop'),
+    closeReviewBtn: document.getElementById('closeReviewBtn'),
+
     // Toast
     toastContainer: document.getElementById('toastContainer')
 };
@@ -92,6 +108,12 @@ var selectedIds = {};
 var db = null;
 var pendingImages = [];       // 待上传的 File 对象
 var removedImageIds = [];     // 编辑时待删除的已有图片 ID
+var activeStatusFilter = 'all'; // 当前激活的状态筛选: all | mastered | unmastered | favorites
+
+// ==================== 随机复习状态 ====================
+var reviewQueue = [];          // 待复习的错题数组
+var reviewIndex = 0;          // 当前复习到的索引
+var reviewAnswerShown = false; // 当前题目答案是否已显示
 
 // ==================== IndexedDB 数据层 ====================
 
@@ -512,6 +534,7 @@ function closeAllModals() {
     closeModal(DOM.detailModal);
     closeModal(DOM.deleteModal);
     closeModal(DOM.imageViewerModal);
+    // 复习弹窗不通过 ESC 一键关闭，防止误退出
 }
 
 // ESC 关闭弹窗
@@ -531,6 +554,10 @@ DOM.deleteModal.addEventListener('click', function (e) {
 DOM.imageViewerModal.addEventListener('click', function (e) {
     if (e.target === DOM.imageViewerModal) closeModal(DOM.imageViewerModal);
 });
+// 复习弹窗不允许点击遮罩关闭（防止误操作）
+DOM.reviewModal.addEventListener('click', function (e) {
+    // 不关闭，用户必须通过按钮退出
+});
 
 // 详情弹窗关闭按钮
 DOM.closeDetailModal.addEventListener('click', function () { closeModal(DOM.detailModal); });
@@ -545,6 +572,10 @@ DOM.cancelDeleteBtn.addEventListener('click', function () {
 // 图片查看器关闭按钮
 DOM.closeImageViewerModal.addEventListener('click', function () { closeModal(DOM.imageViewerModal); });
 DOM.closeImageViewerBtn.addEventListener('click', function () { closeModal(DOM.imageViewerModal); });
+
+// 复习弹窗关闭按钮
+DOM.closeReviewModalTop.addEventListener('click', function () { exitReview(); });
+DOM.closeReviewBtn.addEventListener('click', function () { exitReview(); });
 
 // ==================== 查看详情 ====================
 
@@ -1092,34 +1123,35 @@ async function getFilteredEntries() {
     var keyword = DOM.searchInput.value.trim().toLowerCase();
     var filterSubject = DOM.filterSubject.value;
     var filterDifficulty = DOM.filterDifficulty.value;
-    var filterFavorites = DOM.filterFavorites.checked;
-    var filterMastered = DOM.filterMastered.value;
     var sortByVal = DOM.sortBy.value;
 
-    // 1. 科目筛选
+    // 1. 状态筛选（全部 / 已掌握 / 未掌握 / 收藏）
+    switch (activeStatusFilter) {
+        case 'mastered':
+            entries = entries.filter(function (entry) { return entry.mastered === true; });
+            break;
+        case 'unmastered':
+            entries = entries.filter(function (entry) { return !entry.mastered; });
+            break;
+        case 'favorites':
+            entries = entries.filter(function (entry) { return entry.isFavorite === true; });
+            break;
+        default: // 'all' — 不做筛选
+            break;
+    }
+
+    // 2. 科目筛选
     if (filterSubject) {
         entries = entries.filter(function (entry) { return entry.subject === filterSubject; });
     }
 
-    // 2. 难度筛选
+    // 3. 难度筛选
     if (filterDifficulty) {
         var diffLevel = parseInt(filterDifficulty, 10);
         entries = entries.filter(function (entry) { return entry.difficulty === diffLevel; });
     }
 
-    // 3. 收藏筛选
-    if (filterFavorites) {
-        entries = entries.filter(function (entry) { return entry.isFavorite === true; });
-    }
-
-    // 4. 掌握状态筛选
-    if (filterMastered === 'mastered') {
-        entries = entries.filter(function (entry) { return entry.mastered === true; });
-    } else if (filterMastered === 'unmastered') {
-        entries = entries.filter(function (entry) { return !entry.mastered; });
-    }
-
-    // 5. 关键词搜索（题目 + 知识点 + 错误原因）
+    // 4. 关键词搜索（题目 + 知识点 + 错误原因）
     if (keyword) {
         entries = entries.filter(function (entry) {
             return entry.title.toLowerCase().indexOf(keyword) !== -1 ||
@@ -1128,7 +1160,7 @@ async function getFilteredEntries() {
         });
     }
 
-    // 6. 排序
+    // 5. 排序
     entries = sortEntries(entries, sortByVal);
 
     return entries;
@@ -1167,7 +1199,7 @@ async function renderList() {
         DOM.searchHint.style.display = 'none';
 
         var hasFilter = keyword || DOM.filterSubject.value || DOM.filterDifficulty.value ||
-                        DOM.filterFavorites.checked || DOM.filterMastered.value;
+                        activeStatusFilter !== 'all';
         if (hasFilter) {
             DOM.emptyState.querySelector('.empty-text').textContent = '未找到匹配的错题';
             DOM.emptyState.querySelector('.empty-hint').textContent = '尝试更换筛选条件或搜索关键词';
@@ -1278,25 +1310,6 @@ async function renderList() {
 
 // ==================== 更新统计 ====================
 
-async function updateStats() {
-    var entries = await loadEntries();
-    var total = entries.length;
-    var advanced = 0, linear = 0, probability = 0;
-
-    for (var i = 0; i < entries.length; i++) {
-        switch (entries[i].subject) {
-            case '高等数学': advanced++; break;
-            case '线性代数': linear++; break;
-            case '概率论': probability++; break;
-        }
-    }
-
-    animateNumber(DOM.statTotal, total);
-    animateNumber(DOM.statAdvanced, advanced);
-    animateNumber(DOM.statLinear, linear);
-    animateNumber(DOM.statProbability, probability);
-}
-
 function animateNumber(element, target) {
     if (element._animInterval) {
         clearInterval(element._animInterval);
@@ -1343,20 +1356,23 @@ async function updateStatsFromEntries(entries) {
         entries = await loadEntries();
     }
     var total = entries.length;
-    var advanced = 0, linear = 0, probability = 0;
+    var mastered = 0, unmastered = 0, favorites = 0;
 
     for (var i = 0; i < entries.length; i++) {
-        switch (entries[i].subject) {
-            case '高等数学': advanced++; break;
-            case '线性代数': linear++; break;
-            case '概率论': probability++; break;
+        if (entries[i].mastered) {
+            mastered++;
+        } else {
+            unmastered++;
+        }
+        if (entries[i].isFavorite) {
+            favorites++;
         }
     }
 
     animateNumber(DOM.statTotal, total);
-    animateNumber(DOM.statAdvanced, advanced);
-    animateNumber(DOM.statLinear, linear);
-    animateNumber(DOM.statProbability, probability);
+    animateNumber(DOM.statMastered, mastered);
+    animateNumber(DOM.statUnmastered, unmastered);
+    animateNumber(DOM.statFavorites, favorites);
 }
 
 // 保持 updateStats 独立可用（ErrorBook API 调用）
@@ -1674,12 +1690,284 @@ DOM.clearSearchBtn.addEventListener('click', function () {
 
 DOM.filterSubject.addEventListener('change', function () { renderList(); });
 DOM.filterDifficulty.addEventListener('change', function () { renderList(); });
-DOM.filterFavorites.addEventListener('change', function () { renderList(); });
-DOM.filterMastered.addEventListener('change', function () { renderList(); });
 DOM.sortBy.addEventListener('change', function () { renderList(); });
+
+// ==================== 状态筛选按钮事件 ====================
+
+DOM.statusFilterGroup.addEventListener('click', function (e) {
+    var btn = e.target.closest('.status-filter-btn');
+    if (!btn) return;
+    var status = btn.getAttribute('data-status');
+    if (!status || status === activeStatusFilter) return;
+
+    // 切换 active 样式
+    var allBtns = DOM.statusFilterGroup.querySelectorAll('.status-filter-btn');
+    for (var i = 0; i < allBtns.length; i++) {
+        allBtns[i].classList.remove('active');
+    }
+    btn.classList.add('active');
+
+    // 更新筛选状态并刷新列表
+    activeStatusFilter = status;
+    renderList();
+});
+
+// ==================== 随机复习系统 ====================
+
+/**
+ * 开始复习：从未掌握错题中随机抽取最多 5 道
+ */
+async function startReview() {
+    var entries = await loadEntries();
+    // 筛选未掌握的错题
+    var unmastered = entries.filter(function (e) { return !e.mastered; });
+
+    if (unmastered.length === 0) {
+        showToast('所有错题都已掌握！无需复习 🎉', 'success');
+        return;
+    }
+
+    // Fisher-Yates 洗牌算法
+    var shuffled = unmastered.slice();
+    for (var i = shuffled.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = temp;
+    }
+
+    // 取前 5 道（或全部，如果不足 5 道）
+    reviewQueue = shuffled.slice(0, Math.min(5, shuffled.length));
+    reviewIndex = 0;
+    reviewAnswerShown = false;
+
+    openModal(DOM.reviewModal);
+    renderReviewQuestion();
+
+    if (reviewQueue.length < 5) {
+        showToast('未掌握错题仅剩 ' + reviewQueue.length + ' 道，已全部抽取', 'success');
+    }
+}
+
+/**
+ * 渲染当前复习题目
+ */
+function renderReviewQuestion() {
+    if (reviewIndex >= reviewQueue.length) {
+        showReviewSummary();
+        return;
+    }
+
+    var entry = reviewQueue[reviewIndex];
+    reviewAnswerShown = false;
+
+    // 更新进度文字
+    DOM.reviewProgressText.textContent = '第 ' + (reviewIndex + 1) + ' 题 / 共 ' + reviewQueue.length + ' 题';
+
+    // 更新进度条
+    var progressPercent = (reviewIndex / reviewQueue.length) * 100;
+    DOM.reviewProgressFill.style.width = progressPercent + '%';
+
+    // 渲染题目卡片
+    var tagClass = SUBJECT_TAG_CLASS[entry.subject] || '';
+    var html = '';
+    html += '<div class="review-field">';
+    html += '  <div class="detail-label">题目</div>';
+    html += '  <div class="detail-value review-question-text">' + escapeHtml(entry.title) + '</div>';
+    html += '</div>';
+    html += '<div class="review-meta">';
+    html += '  <span class="error-card-tag ' + tagClass + '">' + escapeHtml(entry.subject) + '</span>';
+    html += '  <span class="error-card-knowledge">' + escapeHtml(entry.knowledgePoint) + '</span>';
+    html += '  <span class="error-card-stars">' + renderStars(entry.difficulty) + '</span>';
+    html += '</div>';
+
+    DOM.reviewQuestionCard.innerHTML = html;
+    DOM.reviewQuestionCard.style.display = 'block';
+    DOM.reviewAnswerSection.style.display = 'none';
+    DOM.reviewAnswerSection.innerHTML = '';
+    DOM.reviewSummary.style.display = 'none';
+    DOM.reviewProgressSection.style.display = 'block';
+    DOM.reviewActions.style.display = 'flex';
+
+    // 按钮状态
+    DOM.reviewShowAnswerBtn.style.display = 'inline-flex';
+    DOM.reviewMasteredBtn.style.display = 'none';
+    DOM.reviewNextBtn.style.display = 'none';
+
+    // 更新掌握按钮文字
+    updateReviewMasteredBtn();
+}
+
+/**
+ * 显示答案 / 错误原因
+ */
+function showReviewAnswer() {
+    if (reviewAnswerShown) return;
+    reviewAnswerShown = true;
+
+    var entry = reviewQueue[reviewIndex];
+
+    var html = '';
+    html += '<div class="review-answer-header">💡 答案 / 错误原因</div>';
+    html += '<div class="review-answer-content">' + escapeHtml(entry.errorReason) + '</div>';
+
+    DOM.reviewAnswerSection.innerHTML = html;
+    DOM.reviewAnswerSection.style.display = 'block';
+
+    // 切换按钮
+    DOM.reviewShowAnswerBtn.style.display = 'none';
+    DOM.reviewMasteredBtn.style.display = 'inline-flex';
+    DOM.reviewNextBtn.style.display = 'inline-flex';
+
+    // 异步加载图片
+    if (entry.images && entry.images.length > 0) {
+        loadImageUrls(entry.images).then(function (imageUrls) {
+            var container = DOM.reviewAnswerSection;
+            var imgHtml = '<div class="review-images">';
+            for (var j = 0; j < imageUrls.length; j++) {
+                if (imageUrls[j].url) {
+                    imgHtml += '<img class="detail-image-thumb" src="' + imageUrls[j].url + '" alt="' + escapeHtml(imageUrls[j].fileName) + '" title="点击查看大图" style="cursor:pointer;">';
+                }
+            }
+            imgHtml += '</div>';
+            container.innerHTML += imgHtml;
+
+            // 点击图片放大
+            var imgs = container.querySelectorAll('.detail-image-thumb');
+            for (var k = 0; k < imgs.length; k++) {
+                imgs[k].addEventListener('click', function () {
+                    DOM.imageViewerImg.src = this.src;
+                    DOM.imageViewerTitle.textContent = this.alt || '图片预览';
+                    openModal(DOM.imageViewerModal);
+                });
+            }
+        });
+    }
+}
+
+/**
+ * 更新掌握按钮状态
+ */
+function updateReviewMasteredBtn() {
+    if (reviewIndex >= reviewQueue.length) return;
+    var entry = reviewQueue[reviewIndex];
+    if (entry.mastered) {
+        DOM.reviewMasteredBtn.textContent = '✅ 已掌握';
+        DOM.reviewMasteredBtn.classList.add('btn-mastered-done');
+    } else {
+        DOM.reviewMasteredBtn.textContent = '✅ 标记已掌握';
+        DOM.reviewMasteredBtn.classList.remove('btn-mastered-done');
+    }
+}
+
+/**
+ * 在复习中切换掌握状态
+ */
+async function markReviewMastered() {
+    if (reviewIndex >= reviewQueue.length) return;
+    var entry = reviewQueue[reviewIndex];
+
+    // 更新数据库
+    var entries = await loadEntries();
+    for (var i = 0; i < entries.length; i++) {
+        if (entries[i].id === entry.id) {
+            entries[i].mastered = !entries[i].mastered;
+            if (entries[i].mastered) {
+                entries[i].lastReviewed = new Date().toISOString();
+                entries[i].reviewCount = (entries[i].reviewCount || 0) + 1;
+            }
+            break;
+        }
+    }
+    await saveEntries(entries);
+
+    // 同步更新本地队列中的条目
+    entry.mastered = !entry.mastered;
+
+    updateReviewMasteredBtn();
+    await updateStats();
+    showToast(entry.mastered ? '已标记为已掌握 ✓' : '已取消掌握标记', 'success');
+}
+
+/**
+ * 进入下一题或显示总结
+ */
+async function reviewNext() {
+    // 进度条更新到当前题目完成
+    var progressPercent = ((reviewIndex + 1) / reviewQueue.length) * 100;
+    DOM.reviewProgressFill.style.width = progressPercent + '%';
+
+    reviewIndex++;
+    reviewAnswerShown = false;
+
+    if (reviewIndex >= reviewQueue.length) {
+        showReviewSummary();
+    } else {
+        renderReviewQuestion();
+        // 滚动到顶部
+        DOM.reviewBody.scrollTop = 0;
+    }
+}
+
+/**
+ * 显示复习完成总结
+ */
+async function showReviewSummary() {
+    DOM.reviewQuestionCard.style.display = 'none';
+    DOM.reviewAnswerSection.style.display = 'none';
+    DOM.reviewProgressSection.style.display = 'none';
+    DOM.reviewActions.style.display = 'none';
+
+    // 刷新全局统计
+    await updateStats();
+
+    var totalReviewed = reviewQueue.length;
+    var masteredNow = reviewQueue.filter(function (e) { return e.mastered; }).length;
+    var unmasteredNow = totalReviewed - masteredNow;
+
+    var html = '';
+    html += '<div class="review-summary-container">';
+    html += '  <div class="review-summary-icon">🎉</div>';
+    html += '  <h3 class="review-summary-title">复习完成！</h3>';
+    html += '  <div class="review-summary-stats">';
+    html += '    <div class="review-summary-stat">';
+    html += '      <span class="review-summary-num">' + totalReviewed + '</span>';
+    html += '      <span class="review-summary-label">本次复习总数</span>';
+    html += '    </div>';
+    html += '    <div class="review-summary-stat">';
+    html += '      <span class="review-summary-num review-summary-mastered">' + masteredNow + '</span>';
+    html += '      <span class="review-summary-label">已掌握</span>';
+    html += '    </div>';
+    html += '    <div class="review-summary-stat">';
+    html += '      <span class="review-summary-num review-summary-unmastered">' + unmasteredNow + '</span>';
+    html += '      <span class="review-summary-label">未掌握</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '</div>';
+
+    DOM.reviewSummary.innerHTML = html;
+    DOM.reviewSummary.style.display = 'block';
+}
+
+/**
+ * 退出复习模式
+ */
+function exitReview() {
+    closeModal(DOM.reviewModal);
+    reviewQueue = [];
+    reviewIndex = 0;
+    reviewAnswerShown = false;
+    refreshAll();
+}
+
+// 复习弹窗内按钮事件绑定
+DOM.reviewShowAnswerBtn.addEventListener('click', function () { showReviewAnswer(); });
+DOM.reviewMasteredBtn.addEventListener('click', function () { markReviewMastered(); });
+DOM.reviewNextBtn.addEventListener('click', function () { reviewNext(); });
 
 // ==================== 工具栏事件 ====================
 
+DOM.startReviewBtn.addEventListener('click', function () { startReview(); });
 DOM.batchModeBtn.addEventListener('click', function () { enterBatchMode(); });
 DOM.batchDeleteBtn.addEventListener('click', function () { executeBatchDelete(); });
 
@@ -1756,7 +2044,7 @@ async function init() {
     await refreshAll();
     DOM.titleInput.focus();
 
-    console.log('数学错题本 V1.3 初始化完成 ✨');
+    console.log('数学错题本 V1.5 初始化完成 ✨');
     var count = await loadEntries();
     console.log('已加载 ' + count.length + ' 条错题记录（IndexedDB）');
 }
@@ -1774,9 +2062,9 @@ window.ErrorBook = {
         var entries = await loadEntries();
         return {
             total: entries.length,
-            advanced: entries.filter(function (e) { return e.subject === '高等数学'; }).length,
-            linear: entries.filter(function (e) { return e.subject === '线性代数'; }).length,
-            probability: entries.filter(function (e) { return e.subject === '概率论'; }).length
+            mastered: entries.filter(function (e) { return e.mastered; }).length,
+            unmastered: entries.filter(function (e) { return !e.mastered; }).length,
+            favorites: entries.filter(function (e) { return e.isFavorite; }).length
         };
     },
     exportAll: async function () {
@@ -1795,11 +2083,17 @@ window.ErrorBook = {
     resetFilters: function () {
         DOM.filterSubject.value = '';
         DOM.filterDifficulty.value = '';
-        DOM.filterFavorites.checked = false;
-        DOM.filterMastered.value = '';
         DOM.sortBy.value = 'newest';
         DOM.searchInput.value = '';
         DOM.clearSearchBtn.style.display = 'none';
+        // 重置状态筛选按钮为"全部"
+        activeStatusFilter = 'all';
+        var allBtns = DOM.statusFilterGroup.querySelectorAll('.status-filter-btn');
+        for (var i = 0; i < allBtns.length; i++) {
+            allBtns[i].classList.remove('active');
+        }
+        var allBtn = DOM.statusFilterGroup.querySelector('[data-status="all"]');
+        if (allBtn) allBtn.classList.add('active');
         if (batchMode) exitBatchMode();
         renderList();
     },
@@ -1810,5 +2104,14 @@ window.ErrorBook = {
             if (entries[i].images) totalImages += entries[i].images.length;
         }
         return { entries: entries.length, images: totalImages, dbName: DB_NAME };
+    },
+    startReview: startReview,
+    exitReview: exitReview,
+    getReviewState: function () {
+        return {
+            queueLength: reviewQueue.length,
+            currentIndex: reviewIndex,
+            answerShown: reviewAnswerShown
+        };
     }
 };
