@@ -1,5 +1,5 @@
 /* ============================================================
-   数学错题本 V1.5 — 样式表
+   数学错题本 V1.6.1 — 样式表
    ============================================================ */
 
 /* ==================== CSS 变量 ==================== */
@@ -1747,4 +1747,511 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
+}
+
+/* ==================== 📷 拍照录题区域 ==================== */
+.ocr-section {
+    background: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%);
+    border: 2px dashed var(--primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    text-align: center;
+    transition: border-color var(--transition), background var(--transition);
+}
+
+.ocr-section:hover {
+    border-color: var(--primary-dark);
+    background: linear-gradient(135deg, #E0E7FF 0%, #EDE9FE 100%);
+}
+
+.ocr-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.ocr-section-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.ocr-section-hint {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
+}
+
+.ocr-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* 拍照按钮 */
+.btn-ocr-camera {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    background: linear-gradient(135deg, var(--primary) 0%, #6366F1 100%);
+    color: var(--white);
+    box-shadow: 0 4px 12px rgba(74, 123, 255, 0.35);
+    touch-action: manipulation;
+    user-select: none;
+    min-height: 48px;
+}
+
+.btn-ocr-camera:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(74, 123, 255, 0.45);
+}
+
+.btn-ocr-camera:active {
+    transform: scale(0.97);
+}
+
+.btn-ocr-camera svg {
+    flex-shrink: 0;
+}
+
+/* 相册/上传按钮 */
+.btn-ocr-upload {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    background: var(--white);
+    color: var(--primary);
+    touch-action: manipulation;
+    user-select: none;
+    min-height: 48px;
+}
+
+.btn-ocr-upload:hover {
+    background: var(--primary-light);
+    border-color: var(--primary-dark);
+}
+
+.btn-ocr-upload:active {
+    transform: scale(0.97);
+}
+
+.btn-ocr-upload svg {
+    flex-shrink: 0;
+}
+
+/* ==================== OCR 状态指示器 ==================== */
+.ocr-status {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.ocr-status-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.ocr-spinner {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ocr-spinner-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--primary);
+    animation: ocrSpin 1.2s linear infinite;
+}
+
+@keyframes ocrSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.ocr-status-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ocr-status-label {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ocr-status-progress {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.ocr-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.ocr-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #6366F1);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+/* ==================== OCR 图片预览 ==================== */
+.ocr-preview {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.ocr-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.ocr-preview-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.ocr-preview-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    line-height: 1;
+    /* 确保触摸目标 ≥ 44px */
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ocr-preview-remove:hover {
+    background: var(--danger-light);
+    color: var(--danger);
+}
+
+.ocr-preview img {
+    display: block;
+    width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    background: #1E1E2E;
+    padding: var(--space-sm);
+}
+
+/* ==================== OCR 结果卡片 ==================== */
+.ocr-result-card {
+    background: var(--success-light);
+    border: 1px solid #A7F3D0;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+}
+
+.ocr-result-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #065F46;
+    margin-bottom: 4px;
+}
+
+.ocr-result-text {
+    font-size: 0.8125rem;
+    color: #065F46;
+    line-height: 1.5;
+    word-break: break-all;
+}
+
+/* ==================== 知识点自动识别徽标 ==================== */
+.auto-detect-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    background: linear-gradient(135deg, #DCFCE7 0%, #D1FAE5 100%);
+    color: #166534;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-left: 4px;
+    vertical-align: middle;
+    animation: badgePopIn 0.3s ease;
+}
+
+@keyframes badgePopIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+/* ==================== 详情中的 OCR 来源图片 ==================== */
+.detail-ocr-source {
+    background: var(--primary-light);
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.detail-ocr-source-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 8px;
+}
+
+.detail-ocr-source-img {
+    width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform var(--transition);
+}
+
+.detail-ocr-source-img:hover {
+    transform: scale(1.02);
+}
+
+/* ==================== OCR 错误状态 ==================== */
+.ocr-status-error .ocr-spinner-icon {
+    color: var(--danger);
+    animation: none;
+}
+
+.ocr-status-error .ocr-status-label {
+    color: var(--danger);
+}
+
+.ocr-status-error .ocr-progress-fill {
+    background: var(--danger);
+}
+
+/* 拍照录题区域 has-photo 状态（已有照片时） */
+.ocr-section.has-photo {
+    border-style: solid;
+    border-color: var(--success);
+    background: linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%);
+}
+
+.ocr-section.has-photo .ocr-section-header {
+    color: #059669;
+}
+
+/* ==================== 移动端适配 ==================== */
+@media (max-width: 640px) {
+    .ocr-buttons {
+        flex-direction: column;
+    }
+
+    .btn-ocr-camera,
+    .btn-ocr-upload {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 1rem;
+    }
+
+    .ocr-section {
+        padding: var(--space-md);
+    }
+
+    .ocr-preview img {
+        max-height: 200px;
+    }
+
+    .ocr-status-inner {
+        gap: var(--space-sm);
+    }
+
+    .ocr-spinner {
+        width: 28px;
+        height: 28px;
+    }
+
+    .ocr-spinner-icon {
+        width: 28px;
+        height: 28px;
+    }
+}
+
+/* ==================== 压缩统计信息 ==================== */
+.ocr-compress-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.ocr-compress-icon {
+    font-size: 0.875rem;
+}
+
+.ocr-compress-text {
+    flex: 1;
+}
+
+/* ==================== OCR 结果卡片增强（V1.6.1） ==================== */
+.ocr-result-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.ocr-result-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.ocr-result-label {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #065F46;
+    min-width: 64px;
+    opacity: 0.75;
+}
+
+.ocr-result-value {
+    color: #065F46;
+    word-break: break-all;
+}
+
+.ocr-result-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #047857;
+}
+
+.ocr-result-kp {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #A7F3D0;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.ocr-result-raw {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #047857;
+    opacity: 0.8;
+    max-height: 48px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* 准确率颜色 */
+.confidence-high {
+    color: #059669;
+    font-weight: 600;
+}
+
+.confidence-medium {
+    color: #D97706;
+    font-weight: 600;
+}
+
+.confidence-low {
+    color: #DC2626;
+    font-weight: 600;
+}
+
+/* 置信度警告行 */
+.ocr-confidence-warning {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.ocr-confidence-warning.warn-low {
+    background: #FEF2F2;
+    color: #DC2626;
+    border: 1px solid #FECACA;
+}
+
+.ocr-confidence-warning.warn-good {
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+}
+
+/* ==================== 标题自动更新提示 ==================== */
+.title-auto-updated {
+    animation: titleFlash 0.6s ease;
+}
+
+@keyframes titleFlash {
+    0%   { background: var(--primary-light); }
+    100% { background: transparent; }
 }

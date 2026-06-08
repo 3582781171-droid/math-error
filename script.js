@@ -1,16 +1,34 @@
 /* ============================================================
-   数学错题本 V1.5 — 核心逻辑
+   数学错题本 V1.6.1 — 核心逻辑（用户体验优化版）
    ============================================================ */
 
 // ==================== 常量与配置 ====================
 var STORAGE_KEY = 'math_error_book_entries';
 var DB_NAME = 'MathErrorBook';
 var DB_VERSION = 1;
+var DATA_VERSION = 2; // V1.6 数据版本号，用于兼容迁移
 var SUBJECT_TAG_CLASS = {
     '高等数学': 'tag-advanced',
     '线性代数': 'tag-linear',
     '概率论': 'tag-probability'
 };
+
+// ==================== 知识点关键词匹配规则 ====================
+// 按优先级排序：更具体的关键词排在前面
+var KNOWLEDGE_RULES = [
+    { keywords: ['极限', 'lim', 'lim(', 'x→', 'x->', '→∞', '→0', '无穷小', '无穷大', '洛必达', '夹逼'], point: '极限' },
+    { keywords: ['微分方程', '通解', '特解', '齐次方程', '特征方程', 'y\'\'', 'y\''], point: '微分方程' },
+    { keywords: ['导数', '求导', 'dy/dx', '微分', '可导', "f'(x)", '偏导数', '偏微分', '方向导数', '梯度'], point: '导数' },
+    { keywords: ['积分', '∫', '定积分', '不定积分', '二重积分', '三重积分', '曲线积分', '曲面积分', '原函数'], point: '积分' },
+    { keywords: ['矩阵', '行列式', '特征值', '特征向量', '线性方程组', '逆矩阵', '秩', '线性相关', '线性无关', '正交', '对角化', '二次型'], point: '线性代数' },
+    { keywords: ['概率', '随机变量', '期望', '方差', '分布函数', '密度函数', '正态分布', '二项分布', '泊松分布', '条件概率', '贝叶斯'], point: '概率统计' },
+    { keywords: ['级数', '收敛', '发散', '幂级数', '泰勒', '傅里叶', '无穷级数', '收敛半径', '绝对收敛', '条件收敛'], point: '级数' },
+    { keywords: ['向量', '空间解析几何', '平面方程', '直线方程', '点积', '叉积', '曲面'], point: '空间解析几何' },
+    { keywords: ['连续', '间断点', '可去间断', '跳跃间断'], point: '函数与极限' },
+    { keywords: ['中值定理', '罗尔', '拉格朗日', '柯西', '泰勒公式'], point: '中值定理' },
+    { keywords: ['重积分', '二重积分', '三重积分', '极坐标', '柱坐标', '球坐标'], point: '重积分' },
+    { keywords: ['曲面积分', '曲线积分', '格林公式', '高斯公式', '斯托克斯'], point: '曲线曲面积分' },
+];
 
 // ==================== DOM 引用缓存 ====================
 var DOM = {
@@ -97,6 +115,30 @@ var DOM = {
     closeReviewModalTop: document.getElementById('closeReviewModalTop'),
     closeReviewBtn: document.getElementById('closeReviewBtn'),
 
+    // OCR 拍照录题
+    ocrSection: document.getElementById('ocrSection'),
+    cameraBtn: document.getElementById('cameraBtn'),
+    uploadBtn: document.getElementById('uploadBtn'),
+    cameraInput: document.getElementById('cameraInput'),
+    galleryInput: document.getElementById('galleryInput'),
+    ocrStatus: document.getElementById('ocrStatus'),
+    ocrSpinner: document.getElementById('ocrSpinner'),
+    ocrStatusLabel: document.getElementById('ocrStatusLabel'),
+    ocrStatusProgress: document.getElementById('ocrStatusProgress'),
+    ocrProgressBar: document.getElementById('ocrProgressBar'),
+    ocrProgressFill: document.getElementById('ocrProgressFill'),
+    ocrPreview: document.getElementById('ocrPreview'),
+    ocrPreviewImg: document.getElementById('ocrPreviewImg'),
+    ocrPreviewRemove: document.getElementById('ocrPreviewRemove'),
+    ocrResultCard: document.getElementById('ocrResultCard'),
+    ocrResultText: document.getElementById('ocrResultText'),
+    ocrResultTitle: document.getElementById('ocrResultTitle'),
+    ocrResultKp: document.getElementById('ocrResultKp'),
+    ocrResultConfidence: document.getElementById('ocrResultConfidence'),
+    ocrCompressStats: document.getElementById('ocrCompressStats'),
+    ocrCompressText: document.getElementById('ocrCompressText'),
+    autoDetectBadge: document.getElementById('autoDetectBadge'),
+
     // Toast
     toastContainer: document.getElementById('toastContainer')
 };
@@ -109,6 +151,13 @@ var db = null;
 var pendingImages = [];       // 待上传的 File 对象
 var removedImageIds = [];     // 编辑时待删除的已有图片 ID
 var activeStatusFilter = 'all'; // 当前激活的状态筛选: all | mastered | unmastered | favorites
+
+// ==================== OCR 状态变量 ====================
+var ocrWorker = null;          // Tesseract.js worker 实例
+var ocrSourceFile = null;      // 当前拍照/上传的原始文件
+var ocrSourcePreviewUrl = null; // OCR 源图片的预览 blob URL
+var ocrIsProcessing = false;   // 是否正在识别中
+var ocrResultTextCache = '';   // OCR 识别出的原始文本缓存
 
 // ==================== 随机复习状态 ====================
 var reviewQueue = [];          // 待复习的错题数组
@@ -161,13 +210,18 @@ function migrateFromLocalStorage() {
         var entries = JSON.parse(raw);
         if (!Array.isArray(entries) || entries.length === 0) return Promise.resolve(0);
 
-        // 标准化旧数据
+        // 标准化旧数据（含 V1.6 字段）
         for (var i = 0; i < entries.length; i++) {
             if (typeof entries[i].isFavorite !== 'boolean') entries[i].isFavorite = false;
             if (typeof entries[i].createdAt !== 'string') entries[i].createdAt = new Date().toISOString();
             if (typeof entries[i].mastered !== 'boolean') entries[i].mastered = false;
             if (!Array.isArray(entries[i].images)) entries[i].images = [];
             if (typeof entries[i].reviewCount !== 'number') entries[i].reviewCount = 0;
+            if (entries[i].ocrText === undefined) entries[i].ocrText = null;
+            if (typeof entries[i].dataVersion !== 'number') entries[i].dataVersion = 1;
+            for (var j = 0; j < entries[i].images.length; j++) {
+                if (!entries[i].images[j].type) entries[i].images[j].type = 'manual';
+            }
         }
 
         return saveEntries(entries).then(function () {
@@ -195,13 +249,20 @@ function loadEntries() {
                 var request = store.getAll();
                 request.onsuccess = function () {
                     var entries = request.result || [];
-                    // 兼容旧数据
+                    // 兼容旧数据（V1.5 → V1.6 迁移）
                     for (var i = 0; i < entries.length; i++) {
                         if (typeof entries[i].isFavorite !== 'boolean') entries[i].isFavorite = false;
                         if (typeof entries[i].createdAt !== 'string') entries[i].createdAt = new Date().toISOString();
                         if (typeof entries[i].mastered !== 'boolean') entries[i].mastered = false;
                         if (!Array.isArray(entries[i].images)) entries[i].images = [];
                         if (typeof entries[i].reviewCount !== 'number') entries[i].reviewCount = 0;
+                        // V1.6 新增字段
+                        if (entries[i].ocrText === undefined) entries[i].ocrText = null;
+                        if (typeof entries[i].dataVersion !== 'number') entries[i].dataVersion = 1;
+                        // 旧图片没有 type 字段，标记为 'manual'
+                        for (var j = 0; j < entries[i].images.length; j++) {
+                            if (!entries[i].images[j].type) entries[i].images[j].type = 'manual';
+                        }
                     }
                     resolve(entries);
                 };
@@ -237,6 +298,15 @@ function fallbackLoadFromLocalStorage() {
                 && typeof entry.difficulty === 'number'
                 && entry.difficulty >= 1
                 && entry.difficulty <= 5;
+        }).map(function (entry) {
+            // V1.6 字段兼容
+            if (entry.ocrText === undefined) entry.ocrText = null;
+            if (typeof entry.dataVersion !== 'number') entry.dataVersion = 1;
+            if (!Array.isArray(entry.images)) entry.images = [];
+            for (var k = 0; k < entry.images.length; k++) {
+                if (!entry.images[k].type) entry.images[k].type = 'manual';
+            }
+            return entry;
         });
     } catch (e) {
         return [];
@@ -518,6 +588,482 @@ function renderDetailStars(level) {
     return html;
 }
 
+// ==================== 知识点自动识别 ====================
+
+/**
+ * 根据文本内容自动识别知识点
+ * @param {string} text - OCR 或用户输入的文本
+ * @returns {string} 识别出的知识点，未匹配返回空字符串
+ */
+function detectKnowledgePoint(text) {
+    if (!text || !text.trim()) return '';
+    var lowerText = text.toLowerCase().replace(/\s+/g, ' ');
+    for (var i = 0; i < KNOWLEDGE_RULES.length; i++) {
+        var rule = KNOWLEDGE_RULES[i];
+        for (var j = 0; j < rule.keywords.length; j++) {
+            if (lowerText.indexOf(rule.keywords[j].toLowerCase()) !== -1) {
+                return rule.point;
+            }
+        }
+    }
+    return '';
+}
+
+/**
+ * 自动填充知识点字段
+ * @param {string} text - 要分析的文本
+ * @returns {string|null} 识别出的知识点，未匹配返回 null
+ */
+function autoFillKnowledgePoint(text) {
+    var detected = detectKnowledgePoint(text);
+    if (detected) {
+        DOM.knowledgePointInput.value = detected;
+        DOM.autoDetectBadge.style.display = 'inline';
+        return detected;
+    } else {
+        DOM.autoDetectBadge.style.display = 'none';
+        return null;
+    }
+}
+
+/**
+ * 根据文本内容自动生成规范化标题
+ * 格式：【知识点】+ 前20字
+ * @param {string} text - OCR 或用户输入的文本
+ * @returns {string} 生成的标题
+ */
+function generateAutoTitle(text) {
+    if (!text || !text.trim()) return '';
+    // 先移除已有的【xxx】前缀
+    var cleanText = text.replace(/^【[^】]*】\s*/, '').trim();
+    if (!cleanText) return text;
+    var knowledgePoint = detectKnowledgePoint(cleanText);
+    var prefix = knowledgePoint ? '【' + knowledgePoint + '】' : '【未分类】';
+    var shortText = cleanText.length > 20 ? cleanText.substring(0, 20) + '…' : cleanText;
+    return prefix + shortText;
+}
+
+// ==================== OCR 引擎管理 ====================
+
+/**
+ * 初始化 Tesseract.js Worker（懒加载，单例）
+ * @returns {Promise<Tesseract.Worker>}
+ */
+function initOCRWorker() {
+    if (ocrWorker) return Promise.resolve(ocrWorker);
+
+    DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+    DOM.ocrStatusProgress.textContent = '首次使用需下载语言包（约30MB）';
+    DOM.ocrProgressFill.style.width = '0%';
+
+    return Tesseract.createWorker('chi_sim+eng', 1, {
+        logger: function (m) {
+            if (m.status === 'recognizing text') {
+                // 识别阶段
+                var pct = Math.round((m.progress || 0) * 100);
+                DOM.ocrStatusLabel.textContent = '正在识别题目...';
+                DOM.ocrStatusProgress.textContent = pct + '%';
+                DOM.ocrProgressFill.style.width = pct + '%';
+            } else if (m.status === 'loading tesseract core') {
+                DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+                DOM.ocrStatusProgress.textContent = '初始化核心引擎';
+                DOM.ocrProgressFill.style.width = '15%';
+            } else if (m.status === 'initializing tesseract') {
+                DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+                DOM.ocrStatusProgress.textContent = '初始化识别器';
+                DOM.ocrProgressFill.style.width = '25%';
+            } else if (m.status === 'loading language traineddata') {
+                var loadPct = Math.round((m.progress || 0) * 100);
+                DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+                DOM.ocrStatusProgress.textContent = '下载语言包 ' + loadPct + '%';
+                DOM.ocrProgressFill.style.width = Math.round(25 + loadPct * 0.5) + '%';
+            } else if (m.status === 'loaded language traineddata') {
+                DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+                DOM.ocrStatusProgress.textContent = '语言包加载完成';
+                DOM.ocrProgressFill.style.width = '75%';
+            } else if (m.status === 'initializing api') {
+                DOM.ocrProgressFill.style.width = '85%';
+            }
+        }
+    }).then(function (worker) {
+        ocrWorker = worker;
+        return worker;
+    });
+}
+
+/**
+ * 销毁 OCR Worker 释放内存
+ */
+function terminateOCRWorker() {
+    if (ocrWorker) {
+        try { ocrWorker.terminate(); } catch (e) {}
+        ocrWorker = null;
+    }
+}
+
+/**
+ * 压缩图片用于 OCR（最长边 1600px，JPEG Q=0.8，仅 >1MB 时触发）
+ * @param {File} file
+ * @returns {Promise<{blob: Blob, originalSize: number, compressedSize: number, ratio: number, wasCompressed: boolean}>}
+ */
+function compressImageForOCR(file) {
+    var maxWidth = 1600;
+    var quality = 0.8;
+    var originalSize = file.size;
+    var threshold = 1 * 1024 * 1024; // 1MB
+
+    return new Promise(function (resolve) {
+        // 小于 1MB 的图片不压缩
+        if (file.size <= threshold) {
+            resolve({
+                blob: file,
+                originalSize: originalSize,
+                compressedSize: originalSize,
+                ratio: 0,
+                wasCompressed: false
+            });
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var img = new Image();
+            img.onload = function () {
+                // 既不超过 maxWidth 且尺寸也不大 → 也跳过压缩
+                if (img.width <= maxWidth && file.size <= threshold * 1.5) {
+                    resolve({
+                        blob: file,
+                        originalSize: originalSize,
+                        compressedSize: originalSize,
+                        ratio: 0,
+                        wasCompressed: false
+                    });
+                    return;
+                }
+                var canvas = document.createElement('canvas');
+                var ratio = Math.min(1, maxWidth / img.width);
+                canvas.width = Math.round(img.width * ratio);
+                canvas.height = Math.round(img.height * ratio);
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(function (blob) {
+                    var result = blob || file;
+                    var compressedSize = result.size;
+                    var compressRatio = Math.round((1 - compressedSize / originalSize) * 100);
+                    resolve({
+                        blob: result,
+                        originalSize: originalSize,
+                        compressedSize: compressedSize,
+                        ratio: compressRatio > 0 ? compressRatio : 0,
+                        wasCompressed: compressRatio > 0
+                    });
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = function () {
+                resolve({
+                    blob: file, originalSize: originalSize,
+                    compressedSize: originalSize, ratio: 0, wasCompressed: false
+                });
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = function () {
+            resolve({
+                blob: file, originalSize: originalSize,
+                compressedSize: originalSize, ratio: 0, wasCompressed: false
+            });
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
+ * 格式化文件大小显示
+ * @param {number} bytes
+ * @returns {string}
+ */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * 显示压缩统计信息
+ * @param {{originalSize: number, compressedSize: number, ratio: number, wasCompressed: boolean}} stats
+ */
+function showCompressionStats(stats) {
+    if (stats.wasCompressed) {
+        DOM.ocrCompressText.textContent =
+            '原图：' + formatFileSize(stats.originalSize) +
+            ' → 压缩后：' + formatFileSize(stats.compressedSize) +
+            '（压缩率 ' + stats.ratio + '%）';
+    } else {
+        DOM.ocrCompressText.textContent = '原图：' + formatFileSize(stats.originalSize) + '（无需压缩）';
+    }
+    DOM.ocrCompressStats.style.display = 'flex';
+}
+
+function hideCompressionStats() {
+    DOM.ocrCompressStats.style.display = 'none';
+    DOM.ocrCompressText.textContent = '';
+}
+
+/**
+ * 执行 OCR 识别
+ * @param {File} file - 图片文件
+ * @returns {Promise<{text: string, detectedKnowledge: string|null}>}
+ */
+async function performOCR(file) {
+    if (ocrIsProcessing) {
+        showToast('正在识别中，请稍候', 'error');
+        return null;
+    }
+
+    ocrIsProcessing = true;
+    showOCRStatus('recognizing');
+
+    try {
+        // 压缩图片
+        var compressResult = await compressImageForOCR(file);
+
+        // 显示压缩统计
+        showCompressionStats(compressResult);
+
+        // 初始化 Worker
+        var worker = await initOCRWorker();
+
+        // 执行识别
+        DOM.ocrStatusLabel.textContent = '正在识别题目...';
+        DOM.ocrStatusProgress.textContent = '处理中';
+        DOM.ocrProgressFill.style.width = '50%';
+
+        var result = await worker.recognize(compressResult.blob);
+
+        var text = (result.data.text || '').trim();
+        var confidence = typeof result.data.confidence === 'number'
+            ? Math.round(result.data.confidence)
+            : 0;
+
+        // 后处理：清理常见 OCR 噪音
+        text = cleanOCRText(text);
+
+        // 保存 OCR 原始结果
+        ocrResultTextCache = text;
+
+        // 自动识别知识点
+        var detectedKnowledge = detectKnowledgePoint(text);
+
+        // 自动生成标题
+        var autoTitle = generateAutoTitle(text);
+
+        // 填充表单
+        DOM.titleInput.value = autoTitle;
+        lastAutoTitle = autoTitle; // 记录以便编辑同步检测
+        autoFillKnowledgePoint(text);
+
+        // 显示增强型结果卡片
+        showOCRResult(text, detectedKnowledge, confidence, autoTitle);
+
+        hideOCRStatus();
+        ocrIsProcessing = false;
+
+        return {
+            text: text,
+            detectedKnowledge: detectedKnowledge,
+            confidence: confidence,
+            autoTitle: autoTitle,
+            compressResult: compressResult
+        };
+    } catch (err) {
+        console.error('OCR 识别失败:', err);
+        showOCRError('识别失败：' + (err.message || '未知错误'));
+        hideCompressionStats();
+        ocrIsProcessing = false;
+        return null;
+    }
+}
+
+/**
+ * 获取置信度对应的 CSS 类名
+ * @param {number} confidence
+ * @returns {string}
+ */
+function getConfidenceClass(confidence) {
+    if (confidence >= 80) return 'confidence-high';
+    if (confidence >= 70) return 'confidence-medium';
+    return 'confidence-low';
+}
+
+/**
+ * 获取置信度对应的文本标签
+ * @param {number} confidence
+ * @returns {string}
+ */
+function getConfidenceLabel(confidence) {
+    if (confidence >= 80) return ' ✅ 识别质量良好';
+    if (confidence >= 70) return ' ✅ 识别质量良好';
+    return ' ⚠️ 识别准确率较低，建议人工检查';
+}
+
+/**
+ * 清理 OCR 文本中的常见噪音
+ * @param {string} text
+ * @returns {string}
+ */
+function cleanOCRText(text) {
+    return text
+        // 移除多余空行
+        .replace(/\n{3,}/g, '\n\n')
+        // 移除行首行尾多余空格
+        .replace(/[ \t]+$/gm, '')
+        .replace(/^[ \t]+/gm, '')
+        // 合并被断开的短行
+        .replace(/([^\n])\n([^\n]{1,10})$/gm, function (m, a, b) {
+            // 短行可能是公式被断开，合并
+            return a + ' ' + b;
+        })
+        .trim();
+}
+
+// ==================== OCR UI 状态管理 ====================
+
+/**
+ * 显示 OCR 状态指示器
+ * @param {string} mode - 'loading' | 'recognizing'
+ */
+function showOCRStatus(mode) {
+    DOM.ocrStatus.style.display = 'block';
+    DOM.ocrStatus.classList.remove('ocr-status-error');
+    DOM.ocrSpinner.style.display = 'flex';
+    DOM.ocrProgressFill.style.width = mode === 'loading' ? '10%' : '50%';
+
+    if (mode === 'loading') {
+        DOM.ocrStatusLabel.textContent = '正在加载 OCR 引擎...';
+        DOM.ocrStatusProgress.textContent = '准备中';
+    }
+}
+
+function hideOCRStatus() {
+    DOM.ocrStatus.style.display = 'none';
+    DOM.ocrStatus.classList.remove('ocr-status-error');
+    DOM.ocrProgressFill.style.width = '0%';
+}
+
+function showOCRError(message) {
+    DOM.ocrStatus.style.display = 'block';
+    DOM.ocrStatus.classList.add('ocr-status-error');
+    DOM.ocrSpinner.style.display = 'none';
+    DOM.ocrStatusLabel.textContent = message;
+    DOM.ocrStatusProgress.textContent = '请重试或手动输入题目';
+    DOM.ocrProgressFill.style.width = '100%';
+    DOM.ocrProgressFill.style.background = 'var(--danger)';
+
+    // 3秒后自动隐藏
+    setTimeout(function () {
+        if (DOM.ocrStatus.classList.contains('ocr-status-error')) {
+            hideOCRStatus();
+            DOM.ocrProgressFill.style.background = '';
+        }
+    }, 5000);
+}
+
+function showOCRResult(text, detectedKnowledge, confidence, autoTitle) {
+    DOM.ocrResultCard.style.display = 'block';
+
+    // 标题
+    DOM.ocrResultTitle.textContent = autoTitle || text.substring(0, 30) + '…';
+
+    // 知识点
+    if (detectedKnowledge) {
+        DOM.ocrResultKp.textContent = detectedKnowledge;
+        DOM.ocrResultKp.style.display = 'inline-flex';
+    } else {
+        DOM.ocrResultKp.textContent = '未识别';
+        DOM.ocrResultKp.style.display = 'inline-flex';
+    }
+
+    // 准确率
+    var confClass = getConfidenceClass(confidence);
+    var confLabel = getConfidenceLabel(confidence);
+    DOM.ocrResultConfidence.innerHTML =
+        '<span class="' + confClass + '">' + confidence + '%</span>' +
+        '<span class="ocr-confidence-warning ' + (confidence >= 70 ? 'warn-good' : 'warn-low') + '">' + confLabel + '</span>';
+
+    // 原文摘要
+    var display = text.length > 100 ? text.substring(0, 100) + '…' : text;
+    DOM.ocrResultText.textContent = display;
+}
+
+function hideOCRResult() {
+    DOM.ocrResultCard.style.display = 'none';
+    DOM.ocrResultText.textContent = '';
+    DOM.ocrResultTitle.textContent = '';
+    DOM.ocrResultKp.textContent = '';
+    DOM.ocrResultConfidence.innerHTML = '';
+}
+
+// ==================== 照片拍摄与上传处理 ====================
+
+/**
+ * 处理用户选择的图片文件（拍照或上传）
+ * @param {File} file
+ */
+function handlePhotoFile(file) {
+    if (!file || !file.type.match(/^image\//)) {
+        showToast('请选择图片文件', 'error');
+        return;
+    }
+
+    // 检查文件大小（最大 20MB）
+    if (file.size > 20 * 1024 * 1024) {
+        showToast('图片过大，请选择小于20MB的图片', 'error');
+        return;
+    }
+
+    // 清理之前的 OCR 源文件预览 URL
+    if (ocrSourcePreviewUrl) {
+        URL.revokeObjectURL(ocrSourcePreviewUrl);
+        ocrSourcePreviewUrl = null;
+    }
+
+    // 保存文件引用
+    ocrSourceFile = file;
+
+    // 显示预览
+    ocrSourcePreviewUrl = URL.createObjectURL(file);
+    DOM.ocrPreviewImg.src = ocrSourcePreviewUrl;
+    DOM.ocrPreview.style.display = 'block';
+    DOM.ocrSection.classList.add('has-photo');
+
+    // 清空之前的 OCR 结果
+    hideOCRResult();
+    DOM.ocrStatus.classList.remove('ocr-status-error');
+
+    // 自动开始 OCR
+    performOCR(file);
+}
+
+/**
+ * 清除 OCR 源照片
+ */
+function clearOCRSource() {
+    if (ocrSourcePreviewUrl) {
+        URL.revokeObjectURL(ocrSourcePreviewUrl);
+        ocrSourcePreviewUrl = null;
+    }
+    ocrSourceFile = null;
+    ocrResultTextCache = '';
+    DOM.ocrPreview.style.display = 'none';
+    DOM.ocrPreviewImg.src = '';
+    DOM.ocrSection.classList.remove('has-photo');
+    hideOCRStatus();
+    hideOCRResult();
+    hideCompressionStats();
+    DOM.autoDetectBadge.style.display = 'none';
+    // 不清除题目内容和知识点字段（用户可能已编辑）
+}
+
 // ==================== 弹窗管理 ====================
 
 function openModal(modal) {
@@ -590,6 +1136,43 @@ async function viewDetail(id) {
     var tagClass = SUBJECT_TAG_CLASS[entry.subject] || '';
 
     var html = '';
+    // OCR 来源图片（优先显示）
+    var ocrSourceImages = [];
+    var otherImages = [];
+    if (entry.images && entry.images.length > 0) {
+        for (var ii = 0; ii < entry.images.length; ii++) {
+            if (entry.images[ii].type === 'ocr_source') {
+                ocrSourceImages.push(entry.images[ii]);
+            } else {
+                otherImages.push(entry.images[ii]);
+            }
+        }
+    }
+
+    // 显示 OCR 来源照片
+    if (ocrSourceImages.length > 0) {
+        html += '<div class="detail-field">';
+        html += '  <div class="detail-label">📷 题目照片</div>';
+        html += '  <div class="detail-ocr-source">';
+        html += '    <div class="detail-ocr-source-header">';
+        html += '      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="16" rx="2" ry="2"></rect><circle cx="12" cy="10" r="3"></circle></svg>';
+        html += '      <span>OCR 拍照来源</span>';
+        html += '    </div>';
+        html += '    <div class="detail-images" id="detailOcrImages">';
+        html += '      <span style="color:var(--text-muted);font-size:0.8125rem;">加载中…</span>';
+        html += '    </div>';
+        html += '  </div>';
+        html += '</div>';
+    }
+
+    // OCR 文本（如果有）
+    if (entry.ocrText) {
+        html += '<div class="detail-field">';
+        html += '  <div class="detail-label">🤖 OCR 识别原文</div>';
+        html += '  <div class="detail-value" style="font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg);padding:8px 12px;border-radius:6px;white-space:pre-wrap;">' + escapeHtml(entry.ocrText) + '</div>';
+        html += '</div>';
+    }
+
     html += '<div class="detail-field">';
     html += '  <div class="detail-label">题目</div>';
     html += '  <div class="detail-value">' + escapeHtml(entry.title) + '</div>';
@@ -637,10 +1220,10 @@ async function viewDetail(id) {
     html += '  </div>';
     html += '</div>';
 
-    // 图片
-    if (entry.images && entry.images.length > 0) {
+    // 附加图片（非 OCR 来源）
+    if (otherImages.length > 0) {
         html += '<div class="detail-field">';
-        html += '  <div class="detail-label">题目图片（' + entry.images.length + ' 张）</div>';
+        html += '  <div class="detail-label">📎 附加图片（' + otherImages.length + ' 张）</div>';
         html += '  <div class="detail-images" id="detailImages">';
         html += '    <span style="color:var(--text-muted);font-size:0.8125rem;">加载中…</span>';
         html += '  </div>';
@@ -650,9 +1233,33 @@ async function viewDetail(id) {
     DOM.detailContent.innerHTML = html;
     openModal(DOM.detailModal);
 
-    // 异步加载图片
-    if (entry.images && entry.images.length > 0) {
-        loadImageUrls(entry.images).then(function (imageUrls) {
+    // 异步加载 OCR 来源图片
+    if (ocrSourceImages.length > 0) {
+        loadImageUrls(ocrSourceImages).then(function (imageUrls) {
+            var container = document.getElementById('detailOcrImages');
+            if (!container) return;
+            var imgHtml = '';
+            for (var jj = 0; jj < imageUrls.length; jj++) {
+                if (imageUrls[jj].url) {
+                    imgHtml += '<img class="detail-ocr-source-img" src="' + imageUrls[jj].url + '" data-image-id="' + imageUrls[jj].imageId + '" data-file-name="' + escapeHtml(imageUrls[jj].fileName) + '" alt="' + escapeHtml(imageUrls[jj].fileName) + '" title="点击查看原图">';
+                }
+            }
+            container.innerHTML = imgHtml || '<span style="color:var(--text-muted);font-size:0.8125rem;">图片加载失败</span>';
+
+            // 点击放大
+            container.addEventListener('click', function (e) {
+                var img = e.target.closest('.detail-ocr-source-img');
+                if (!img) return;
+                DOM.imageViewerImg.src = img.src;
+                DOM.imageViewerTitle.textContent = img.getAttribute('data-file-name') || '题目照片';
+                openModal(DOM.imageViewerModal);
+            });
+        });
+    }
+
+    // 异步加载附加图片
+    if (otherImages.length > 0) {
+        loadImageUrls(otherImages).then(function (imageUrls) {
             var container = document.getElementById('detailImages');
             if (!container) return;
             var imgHtml = '';
@@ -871,6 +1478,7 @@ async function exportToJSON() {
                         fileName: meta.fileName,
                         mimeType: meta.mimeType,
                         size: meta.size,
+                        type: meta.type || 'manual',
                         data: blobData
                     });
                 }
@@ -958,12 +1566,16 @@ function importFromJSON(file) {
                     if (typeof item.createdAt !== 'string') item.createdAt = new Date().toISOString();
                     if (typeof item.mastered !== 'boolean') item.mastered = false;
                     if (typeof item.reviewCount !== 'number') item.reviewCount = 0;
+                    // V1.6 新增字段兼容
+                    if (item.ocrText === undefined) item.ocrText = null;
+                    if (typeof item.dataVersion !== 'number') item.dataVersion = 1;
 
                     // 处理图片
                     var cleanImages = [];
                     if (Array.isArray(item.images) && item.images.length > 0) {
                         for (var j = 0; j < item.images.length; j++) {
                             var img = item.images[j];
+                            var imgType = img.type || 'manual';
                             if (img.data && typeof img.data === 'string') {
                                 // 有 base64 数据，记录下来稍后写入 IndexedDB
                                 imagesToImport.push({
@@ -971,16 +1583,19 @@ function importFromJSON(file) {
                                     entryId: item.id,
                                     fileName: img.fileName || 'imported_image.jpg',
                                     mimeType: img.mimeType || 'image/jpeg',
-                                    base64data: img.data
+                                    base64data: img.data,
+                                    type: imgType
                                 });
                                 cleanImages.push({
                                     imageId: img.imageId || ('img_import_' + Date.now().toString(36) + '_' + j + '_' + i),
                                     fileName: img.fileName || 'imported_image.jpg',
                                     mimeType: img.mimeType || 'image/jpeg',
-                                    size: img.size || 0
+                                    size: img.size || 0,
+                                    type: imgType
                                 });
                             } else if (img.imageId) {
                                 // 只有元数据，没有 blob（来自旧导出）
+                                if (!img.type) img.type = 'manual';
                                 cleanImages.push(img);
                             }
                         }
@@ -1029,7 +1644,7 @@ function importFromJSON(file) {
                 }
                 try {
                     var blob = dataURIToBlob(imgImport.base64data);
-                    await saveImageBlob(imgImport.imageId, imgImport.entryId, blob, imgImport.fileName, imgImport.mimeType);
+                    await saveImageBlob(imgImport.imageId, imgImport.entryId, blob, imgImport.fileName, imgImport.mimeType, imgImport.type || 'manual');
                     importedImages++;
                 } catch (imgErr) {
                     console.error('图片导入失败:', imgErr);
@@ -1074,7 +1689,8 @@ function dataURIToBlob(dataURI) {
 /**
  * 直接保存 blob 到 IndexedDB（导入时使用）
  */
-function saveImageBlob(imageId, entryId, blob, fileName, mimeType) {
+function saveImageBlob(imageId, entryId, blob, fileName, mimeType, imgType) {
+    if (imgType === void 0) imgType = 'manual';
     return openDB().then(function (database) {
         return new Promise(function (resolve, reject) {
             var record = {
@@ -1083,7 +1699,8 @@ function saveImageBlob(imageId, entryId, blob, fileName, mimeType) {
                 blob: blob,
                 fileName: fileName,
                 mimeType: mimeType,
-                size: blob.size
+                size: blob.size,
+                type: imgType
             };
             var tx = database.transaction('images', 'readwrite');
             var store = tx.objectStore('images');
@@ -1439,6 +2056,95 @@ DOM.imageFileInput.addEventListener('change', function () {
     DOM.imageFileInput.value = '';
 });
 
+// ==================== 拍照录题事件处理 ====================
+
+// 拍照按钮 → 打开相机
+DOM.cameraBtn.addEventListener('click', function () {
+    if (ocrIsProcessing) {
+        showToast('正在识别中，请稍候', 'error');
+        return;
+    }
+    DOM.cameraInput.click();
+});
+
+// 相册/上传按钮 → 打开文件选择
+DOM.uploadBtn.addEventListener('click', function () {
+    if (ocrIsProcessing) {
+        showToast('正在识别中，请稍候', 'error');
+        return;
+    }
+    DOM.galleryInput.click();
+});
+
+// 相机拍照后处理
+DOM.cameraInput.addEventListener('change', function () {
+    if (DOM.cameraInput.files && DOM.cameraInput.files[0]) {
+        handlePhotoFile(DOM.cameraInput.files[0]);
+    }
+    DOM.cameraInput.value = '';
+});
+
+// 相册/上传后处理
+DOM.galleryInput.addEventListener('change', function () {
+    if (DOM.galleryInput.files && DOM.galleryInput.files[0]) {
+        handlePhotoFile(DOM.galleryInput.files[0]);
+    }
+    DOM.galleryInput.value = '';
+});
+
+// 移除 OCR 照片按钮
+DOM.ocrPreviewRemove.addEventListener('click', function () {
+    clearOCRSource();
+});
+
+// ==================== 编辑模式：标题自动同步 ====================
+// 用户修改题目内容后，自动重新检测知识点并更新标题前缀
+var autoTitleTimer = null;
+var lastAutoTitle = '';
+DOM.titleInput.addEventListener('input', function () {
+    if (autoTitleTimer) clearTimeout(autoTitleTimer);
+    var currentValue = DOM.titleInput.value;
+    // 跳过空内容
+    if (!currentValue.trim()) {
+        lastAutoTitle = '';
+        return;
+    }
+    autoTitleTimer = setTimeout(function () {
+        var newTitle = generateAutoTitle(currentValue);
+        // 只有和当前值不同且和上次自动生成的值不同时才更新
+        if (newTitle && newTitle !== currentValue && newTitle !== lastAutoTitle) {
+            lastAutoTitle = newTitle;
+            DOM.titleInput.value = newTitle;
+            // 添加闪烁动画提示用户
+            DOM.titleInput.classList.add('title-auto-updated');
+            setTimeout(function () {
+                DOM.titleInput.classList.remove('title-auto-updated');
+            }, 600);
+            // 同步更新知识点
+            var newKp = detectKnowledgePoint(currentValue.replace(/^【[^】]*】\s*/, '').trim());
+            if (newKp) {
+                DOM.knowledgePointInput.value = newKp;
+                DOM.autoDetectBadge.style.display = 'inline';
+            }
+        }
+    }, 1200); // 1.2 秒防抖，避免打字过程中频繁更新
+});
+
+// 失焦时立即尝试生成
+DOM.titleInput.addEventListener('blur', function () {
+    if (autoTitleTimer) {
+        clearTimeout(autoTitleTimer);
+        autoTitleTimer = null;
+    }
+    var currentValue = DOM.titleInput.value;
+    if (!currentValue.trim()) return;
+    var newTitle = generateAutoTitle(currentValue);
+    if (newTitle && newTitle !== currentValue && newTitle !== lastAutoTitle) {
+        lastAutoTitle = newTitle;
+        DOM.titleInput.value = newTitle;
+    }
+});
+
 /**
  * 添加图片预览缩略图
  */
@@ -1527,6 +2233,10 @@ DOM.errorForm.addEventListener('submit', async function (e) {
                 entries[i].errorReason = errorReason;
                 entries[i].difficulty = difficulty;
                 entries[i].updatedAt = new Date().toISOString();
+                if (ocrResultTextCache && ocrResultTextCache !== entries[i].ocrText) {
+                    entries[i].ocrText = ocrResultTextCache;
+                }
+                entries[i].dataVersion = DATA_VERSION;
 
                 // 删除被移除的已有图片
                 if (removedImageIds.length > 0) {
@@ -1544,12 +2254,24 @@ DOM.errorForm.addEventListener('submit', async function (e) {
                     entries[i].images = keptImages;
                 }
 
-                // 添加新上传的图片
+                // 添加 OCR 源照片（编辑时如重新拍照）
+                if (ocrSourceFile) {
+                    try {
+                        var ocrImgMetaEdit = await saveImage(editingId, ocrSourceFile);
+                        ocrImgMetaEdit.type = 'ocr_source';
+                        entries[i].images.push(ocrImgMetaEdit);
+                    } catch (imgErr) {
+                        console.error('OCR源照片保存失败:', imgErr);
+                    }
+                }
+
+                // 添加新上传的附加图片
                 if (pendingImages.length > 0) {
                     for (var j = 0; j < pendingImages.length; j++) {
                         if (pendingImages[j] !== null) {
                             try {
                                 var meta = await saveImage(editingId, pendingImages[j]);
+                                meta.type = 'manual';
                                 entries[i].images.push(meta);
                             } catch (imgErr) {
                                 console.error('图片保存失败:', imgErr);
@@ -1583,15 +2305,29 @@ DOM.errorForm.addEventListener('submit', async function (e) {
             mastered: false,
             reviewCount: 0,
             images: [],
+            ocrText: ocrResultTextCache || null,
+            dataVersion: DATA_VERSION,
             createdAt: new Date().toISOString()
         };
 
-        // 保存图片
+        // 保存 OCR 源照片（如果有）
+        if (ocrSourceFile) {
+            try {
+                var ocrImgMeta = await saveImage(newEntry.id, ocrSourceFile);
+                ocrImgMeta.type = 'ocr_source'; // 标记为 OCR 源图片
+                newEntry.images.push(ocrImgMeta);
+            } catch (imgErr) {
+                console.error('OCR源照片保存失败:', imgErr);
+            }
+        }
+
+        // 保存手动添加的附加图片
         if (pendingImages.length > 0) {
             for (var jj = 0; jj < pendingImages.length; jj++) {
                 if (pendingImages[jj] !== null) {
                     try {
                         var imgMeta = await saveImage(newEntry.id, pendingImages[jj]);
+                        imgMeta.type = 'manual';
                         newEntry.images.push(imgMeta);
                     } catch (imgErr) {
                         console.error('图片保存失败:', imgErr);
@@ -1622,6 +2358,9 @@ function resetForm() {
     DOM.difficultyInput.value = '0';
     setStarHighlight(0);
     clearImagePreviews();
+    clearOCRSource();
+    lastAutoTitle = '';
+    DOM.autoDetectBadge.style.display = 'none';
     DOM.submitBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>保存错题';
     DOM.cancelEditBtn.style.display = 'none';
     DOM.titleInput.focus();
@@ -1637,6 +2376,7 @@ async function editEntry(id) {
 
     // 填充表单
     DOM.titleInput.value = entry.title;
+    lastAutoTitle = entry.title || ''; // 记录以支持编辑同步
     DOM.subjectSelect.value = entry.subject;
     DOM.knowledgePointInput.value = entry.knowledgePoint;
     DOM.errorReasonInput.value = entry.errorReason;
@@ -1645,10 +2385,43 @@ async function editEntry(id) {
 
     // 清除当前预览
     clearImagePreviews();
+    clearOCRSource();
 
-    // 加载已有图片的预览
+    // 分离 OCR 源图片和附加图片
+    var ocrImgs = [];
+    var manualImgs = [];
     if (entry.images && entry.images.length > 0) {
-        loadImageUrls(entry.images).then(function (imageUrls) {
+        for (var ii = 0; ii < entry.images.length; ii++) {
+            if (entry.images[ii].type === 'ocr_source') {
+                ocrImgs.push(entry.images[ii]);
+            } else {
+                manualImgs.push(entry.images[ii]);
+            }
+        }
+    }
+
+    // 显示 OCR 源图片预览
+    if (ocrImgs.length > 0) {
+        loadImageUrls(ocrImgs).then(function (imageUrls) {
+            if (imageUrls.length > 0 && imageUrls[0].url) {
+                DOM.ocrPreviewImg.src = imageUrls[0].url;
+                DOM.ocrPreview.style.display = 'block';
+                DOM.ocrSection.classList.add('has-photo');
+                // 缓存 OCR 源文件信息以支持重新保存
+                ocrResultTextCache = entry.ocrText || '';
+            }
+        });
+    }
+
+    // 显示 ocrText 标记
+    if (entry.ocrText) {
+        ocrResultTextCache = entry.ocrText;
+        DOM.autoDetectBadge.style.display = 'inline';
+    }
+
+    // 加载附加图片预览
+    if (manualImgs.length > 0) {
+        loadImageUrls(manualImgs).then(function (imageUrls) {
             for (var j = 0; j < imageUrls.length; j++) {
                 if (imageUrls[j].url) {
                     addExistingImagePreview(imageUrls[j].imageId, imageUrls[j].fileName, imageUrls[j].url);
@@ -2044,9 +2817,21 @@ async function init() {
     await refreshAll();
     DOM.titleInput.focus();
 
-    console.log('数学错题本 V1.5 初始化完成 ✨');
+    // 检查 Tesseract.js 是否加载成功
+    if (typeof Tesseract !== 'undefined') {
+        console.log('✅ Tesseract.js OCR 引擎就绪（本地运行，免费无限制）');
+    } else {
+        console.warn('⚠️ Tesseract.js 加载失败，拍照录题功能不可用。请检查网络连接。');
+        DOM.ocrSection.style.opacity = '0.5';
+        DOM.ocrSection.style.pointerEvents = 'none';
+        DOM.ocrSection.querySelector('.ocr-section-hint').textContent = 'OCR 引擎加载失败，请刷新页面重试';
+    }
+
+    console.log('数学错题本 V1.6.1 初始化完成 ✨（用户体验优化版）');
     var count = await loadEntries();
     console.log('已加载 ' + count.length + ' 条错题记录（IndexedDB）');
+    console.log('数据版本：V' + DATA_VERSION + '（向下兼容 V1）');
+    console.log('✨ 新功能：自动标题 | 置信度显示 | 智能压缩 | 编辑同步');
 }
 
 document.addEventListener('DOMContentLoaded', init);
